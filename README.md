@@ -14,20 +14,21 @@ See also the examples basic.py in the sdeux package folder.
 
 Custom
 -----
-this is Alpes Laser S2 Voltage Source API.
+This is Alpes Laser S2 Voltage Source API.
 API version exist each gen4, gen5, gen2005, etc..
 
 I used gen5 api for my equipments.
 Also for customizing Alpes laser S2 UI, i used some python packages.
 
+**Need to PIP Package**
 -----
-Need to PIP Package
 - Pyinstaller
 - Pyqt5 : recommend version 5.13
 - sdeux :aples laser driver
 
+
+**Build**
 -----
-Build
 if you want to build customized UI, use this command
 
 pyinstaller my_app.spec --onefile
