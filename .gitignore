@@ -1,0 +1,12 @@
+.project
+.idea
+.pydevproject
+*.pyo
+*.pyc
+*~
+AUTHORS
+ChangeLog
+dist
+*.egg*
+build
+docs/_build/*
