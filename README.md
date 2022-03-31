@@ -1,11 +1,12 @@
 ===
 Forked by sdeux
 ===
-Writer: chiesa 
-Date: March 31, 2020
-Copyright Alpes Lasers SA, Neuchatel, Switzerland
-Driver for the Alpes Lasers S-2 pulser. Visit https://www.alpeslasers.ch/ for more informations.
-Github: https://github.com/alpeslasers/sdeux
+
+- Writer: chiesa
+- Date: March 31, 2020
+- Copyright Alpes Lasers SA, Neuchatel, Switzerland
+- Driver for the Alpes Lasers S-2 pulser. Visit https://www.alpeslasers.ch/ for more informations.
+- Github: https://github.com/alpeslasers/sdeux
 
 Usage
 -----
