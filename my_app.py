@@ -98,7 +98,7 @@ class MyApp(QWidget):
         # 포트입력 및 연결 테스트 버튼
         self.btn_conn = QPushButton('Not Connected', self)
         self.btn_conn.resize(120,22)
-        self.btn_conn.move(350, 99)
+        self.btn_conn.move(400, 99)
         self.btn_conn.clicked.connect(self.open_connection) #QCoreApplication.instance().quit
 
         self.text_port = QLabel("Port",self)
@@ -215,6 +215,7 @@ class MyApp(QWidget):
         self.text_input_voltage_measured.move(50, 500)
         self.edit_input_voltage_measured = QLabel(self)
         self.edit_input_voltage_measured.move(250, 500)
+        self.edit_input_voltage_measured.resize(150,22)
         self.edit_input_voltage_measured.setText('0')
 
         # output_voltage_measured
@@ -223,6 +224,7 @@ class MyApp(QWidget):
         self.text_output_voltage_measured.move(50, 530)
         self.edit_output_voltage_measured = QLabel(self)
         self.edit_output_voltage_measured.move(250, 530)
+        self.edit_output_voltage_measured.resize(150,22)
         self.edit_output_voltage_measured.setText('0')
 
         # output_current_measured
@@ -231,6 +233,7 @@ class MyApp(QWidget):
         self.text_output_current_measured.move(50, 560)
         self.edit_output_current_measured = QLabel(self)
         self.edit_output_current_measured.move(250, 560)
+        self.edit_output_current_measured.resize(150,22)
         self.edit_output_current_measured.setText('0')
 
         # output_current_measured_out_of_pulse
@@ -239,19 +242,20 @@ class MyApp(QWidget):
         self.text_output_current_measured_out_of_pulse.move(50, 590)
         self.edit_output_current_measured_out_of_pulse = QLabel(self)
         self.edit_output_current_measured_out_of_pulse.move(250, 590)
+        self.edit_output_current_measured_out_of_pulse.resize(150,22)
         self.edit_output_current_measured_out_of_pulse.setText('0')
 
 
 
         self.setWindowTitle('ALPES LASERS for KIST')
-        self.setGeometry(710,200,500,700)
+        self.setGeometry(700,200,600,700)
         self.show()
 
 
     def start_refresh(self):
         global refresher
 
-        refresher = ValueUpdater(self,loop_time=0.5)
+        refresher = ValueUpdater(self,loop_time=0.3)
         refresher.callback.connect(self.thread_callback)
         refresher.start()
 
@@ -265,15 +269,26 @@ class MyApp(QWidget):
 
         # 'output_current_measured', 'MCU_temperature', 'laser_temperature',
         # 'output_current_measured_out_of_pulse', 'status', 'pulse_clock_frequency', 'API_version',
-        input_voltage = s2.input_voltage_measured()
-        output_voltage = s2.measured_voltage()
-        output_current = s2.measured_current()
-        output_current_pulse = s2._info.output_current_measured_out_of_pulse
+        try:
+            self.update_setting()
+            input_voltage = str(s2.input_voltage_measured)
+            output_voltage = s2.measured_voltage
+            output_current = s2.measured_current
+            output_current_pulse = s2._info.output_current_measured_out_of_pulse
 
-        self.edit_input_voltage_measured.setText(str(input_voltage))
-        self.edit_output_voltage_measured.setText(str(output_voltage))
-        self.edit_output_current_measured.setText(str(output_current))
-        self.edit_output_current_measured_out_of_pulse.setText(str(output_current_pulse))
+            # print(str(input_voltage))
+            # print(str(output_voltage))
+            # print(str(output_current))
+            # print(str(output_current_pulse))
+            self.edit_input_voltage_measured.setText(str(input_voltage))
+            self.edit_output_voltage_measured.setText(str(output_voltage))
+            self.edit_output_current_measured.setText(str(output_current))
+            self.edit_output_current_measured_out_of_pulse.setText(str(output_current_pulse))
+        except Exception as e:
+            print(e)
+
+
+
 
 
     def open_connection(self):
@@ -293,10 +308,10 @@ class MyApp(QWidget):
                 s2.set_up()
                 s2.settings.pulsing_mode = 0 # 무조건 OFF 초기화
                 self.combo_box_pulsing.setCurrentText('S2_PULSING_OFF')
-                s2.settings.pulse_period = self.edit_period.text()
-                s2.settings.pulse_width = self.edit_pulse_width.text()
-                s2.settings.output_voltage_set = self.edit_voltage_set.text()
-                s2.settings.output_current_limit = self.edit_output_current_limit.text()
+                s2.settings.pulse_period = int(self.edit_period.text())
+                s2.settings.pulse_width = int(self.edit_pulse_width.text())
+                s2.settings.output_voltage_set = float(self.edit_voltage_set.text())
+                s2.settings.output_current_limit = float(self.edit_output_current_limit.text())
                 #초기 설정값 적용
                 s2.apply_current_settings()
                 s2.reload_info()
@@ -358,7 +373,7 @@ class MyApp(QWidget):
             s2.settings.pulsing_mode = 3
         elif self.combo_box_pulsing.currentText() == 'S2_PULSING_BURST_EXTERNAL':
             s2.settings.pulsing_mode = 6
-        
+
         #setting값 설정
         s2.settings.pulse_period = int(self.edit_period.text())
         s2.settings.pulse_width = int(self.edit_pulse_width.text())
