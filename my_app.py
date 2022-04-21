@@ -3,45 +3,53 @@ import time
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QThread
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton,QMessageBox,QLineEdit,QLabel,QComboBox
-from PyQt5.QtGui import QPainter, QPen,QIntValidator,QDoubleValidator
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMessageBox, QLineEdit, QLabel, QComboBox
+from PyQt5.QtGui import QPainter, QPen, QIntValidator, QDoubleValidator
 from PyQt5.QtCore import QCoreApplication
 from PyQt5 import QtCore
 import sdeux.gen5 as alpes
 import serial
 from sdeux.serial_handler import S2SerialHandler
 
-#---------------------- s2 import
+# ---------------------- s2 import
 # from s2_py_00 import serial_open, serial_close, s2_serial_setup, s2_query_info, s2_set_settings, s2_query_settings
 #
 # from s2_py_00 import S2_info, S2_settings, S2_BAUD, NULL
 # from s2_py_00 import S2_PULSING_OFF, S2_PULSING_INTERNAL, S2_PULSING_EXTERNAL, S2_PULSING_BURST, S2_PULSING_BURST_EXTERNAL
 import logging
 from logging import info, error
+
 logging.getLogger().setLevel(logging.INFO)
-#from tests.s2_local_settings import s2_port_name
+# from tests.s2_local_settings import s2_port_name
 
-#---------------------- s2 import ended
-#'/dev/ttyUSB0'
+# ---------------------- s2 import ended
+# '/dev/ttyUSB0'
 
-global s2_port_name# = 'COM3'
-global connected_status# = False
+global s2_port_name  # = 'COM3'
+global connected_status  # = False
+global measurement_state
+global measurer
 global th
 global refresher
 global s2
+global list_input_voltage_measure_result
+global list_output_voltage_measure_result
+global list_output_current_measure_result
+global list_output_current_out_of_pulse_measure_result
+global list_voltage_set_measure_result
 
 
 class ValueUpdater(QThread):
     callback = QtCore.pyqtSignal(object)
     isRunning = False
 
-    def __init__(self, parent, loop_time=1): #parent는 WndowClass에서 전달하는 self이다.(WidnowClass의 인스턴스)
+    def __init__(self, parent, loop_time=1.0):  # parent는 WndowClass에서 전달하는 self이다.(WidnowClass의 인스턴스)
         super().__init__(parent)
-        self.parent = parent    #self.parent를 사용하여 WindowClass 위젯을 제어할 수 있다.
+        self.parent = parent  # self.parent를 사용하여 WindowClass 위젯을 제어할 수 있다.
         self.loop_time = loop_time
-    
+
     def run(self):
-        #함수 런
+        # 함수 런
         self.isRunning = True
         index = 0
         while self.isRunning:
@@ -53,11 +61,9 @@ class ValueUpdater(QThread):
         try:
             self.isRunning = False
             self.quit()
-            self.wait(3000)
+            self.wait(1000)
         except Exception as e:
             print(e)
-
-        
 
 
 class MyApp(QWidget):
@@ -71,37 +77,46 @@ class MyApp(QWidget):
         self.line_ = QPainter(self)
         self.line_.begin(self)
         self.line_.setPen(QPen(Qt.black, 1))
-        self.line_.drawLine(50, 460, 450, 460)
-        # ----------------------------------구분선
+        self.line_.drawLine(50, 460, 550, 460)
         self.line_.end()
+        # ----------------------------------구분선
+
+        self.line_ = QPainter(self)
+        self.line_.begin(self)
+        self.line_.setPen(QPen(Qt.black, 1))
+        self.line_.drawLine(50, 280, 550, 280)
+        self.line_.end()
+        # ----------------------------------구분선
 
     def initUI(self):
         global connected_status
         global s2_port_name
+        global measurement_state
+        measurement_state = False
         connected_status = False
         s2_port_name = 'COM4'
 
-        self.text_title = QLabel("ALPES LASERS for KIST",self)
+        self.text_title = QLabel("ALPES LASERS for KIST", self)
         self.text_title.setAlignment(Qt.AlignCenter)
-        self.text_title.move(100,20)
+        self.text_title.move(150, 20)
         self.font_title = self.text_title.font()
         self.font_title.setPointSize(20)
         self.font_title.setBold(True)
         self.text_title.setFont(self.font_title)
 
         # 실행 버튼
-        self.btn = QPushButton('설정 업데이트', self)
-        self.btn.resize(100,20)
-        self.btn.move(220, 420)
-        self.btn.clicked.connect(self.update_setting)
+        self.btn_measure = QPushButton('측정', self)
+        self.btn_measure.resize(100, 20)
+        self.btn_measure.move(220, 420)
+        self.btn_measure.clicked.connect(self.start_measure)
 
         # 포트입력 및 연결 테스트 버튼
         self.btn_conn = QPushButton('Not Connected', self)
-        self.btn_conn.resize(120,22)
+        self.btn_conn.resize(120, 22)
         self.btn_conn.move(400, 99)
-        self.btn_conn.clicked.connect(self.open_connection) #QCoreApplication.instance().quit
+        self.btn_conn.clicked.connect(self.open_connection)  # QCoreApplication.instance().quit
 
-        self.text_port = QLabel("Port",self)
+        self.text_port = QLabel("Port", self)
         self.text_port.setAlignment(Qt.AlignCenter)
         self.text_port.move(50, 103)
 
@@ -109,9 +124,7 @@ class MyApp(QWidget):
         self.line_edit.move(200, 100)
         self.line_edit.setText(s2_port_name)
 
-
-
-        #period, ns
+        # period, ns
         self.text_period = QLabel("Period, ns", self)
         self.text_period.setAlignment(Qt.AlignCenter)
         self.text_period.move(50, 133)
@@ -121,7 +134,7 @@ class MyApp(QWidget):
         self.edit_period.setValidator(QIntValidator())
         self.edit_period.setText('50000')
 
-        #pulse_width
+        # pulse_width
         self.text_pulse_width = QLabel("Pulse_width, ns", self)
         self.text_pulse_width.setAlignment(Qt.AlignCenter)
         self.text_pulse_width.move(50, 163)
@@ -130,7 +143,7 @@ class MyApp(QWidget):
         self.edit_pulse_width.setValidator(QIntValidator())
         self.edit_pulse_width.setText('500')
 
-        #output_voltage_set
+        # output_voltage_set
         self.text_voltage_set = QLabel("Output_voltage_set", self)
         self.text_voltage_set.setAlignment(Qt.AlignCenter)
         self.text_voltage_set.move(50, 193)
@@ -139,7 +152,7 @@ class MyApp(QWidget):
         self.edit_voltage_set.setValidator(QDoubleValidator())
         self.edit_voltage_set.setText('0')
 
-        #output_current_limit
+        # output_current_limit
         self.text_output_current_limit = QLabel("Output_current_limit", self)
         self.text_output_current_limit.setAlignment(Qt.AlignCenter)
         self.text_output_current_limit.move(50, 223)
@@ -148,7 +161,7 @@ class MyApp(QWidget):
         self.edit_output_current_limit.setValidator(QDoubleValidator())
         self.edit_output_current_limit.setText('1')
 
-        #s2_pulsing_mode comboBox
+        # s2_pulsing_mode comboBox
         self.text_box_pulsing = QLabel("S2_Pulsing_Mode", self)
         self.text_box_pulsing.setAlignment(Qt.AlignCenter)
         self.text_box_pulsing.move(50, 253)
@@ -162,49 +175,59 @@ class MyApp(QWidget):
         self.combo_box_pulsing.addItem("S2_PULSING_BURST")
         self.combo_box_pulsing.addItem("S2_PULSING_BURST_EXTERNAL")
 
-        #voltage_set_min
-        self.text_voltage_set_min = QLabel("Voltage_Set_Min", self)
+        ############################# 측정용 UI
+
+        # voltage_set_min
+        self.text_voltage_set_min = QLabel("Voltage_Set_Min, (V)", self)
         self.text_voltage_set_min.setAlignment(Qt.AlignCenter)
-        self.text_voltage_set_min.move(50, 283)
-        self.edit_voltage_set_min = QLineEdit(self)
-        self.edit_voltage_set_min.move(200, 280)
+        self.text_voltage_set_min.move(50, 303)
+
+        self.edit_voltage_set_min = QLineEdit(self)  # Voltage_set_min
+        self.edit_voltage_set_min.move(280, 300)
         self.edit_voltage_set_min.setText('0')
-        self.edit_voltage_set_min.setEnabled(False)
+        self.edit_voltage_set_min.setValidator(QDoubleValidator())
+        self.edit_voltage_set_min.setEnabled(True)
 
-        #voltage_set_max
-        self.text_voltage_set_max = QLabel("Voltage_Set_Max", self)
+        # voltage_set_max
+        self.text_voltage_set_max = QLabel("Voltage_Set_Max, (V)", self)
         self.text_voltage_set_max.setAlignment(Qt.AlignCenter)
-        self.text_voltage_set_max.move(50, 313)
-        self.edit_voltage_set_max = QLineEdit(self)
-        self.edit_voltage_set_max.move(200, 310)
-        self.edit_voltage_set_max.setText('0')
-        self.edit_voltage_set_max.setEnabled(False)
+        self.text_voltage_set_max.move(50, 333)
 
-        #voltage_interval
-        self.text_voltage_interval = QLabel("Voltage_Interval", self)
-        self.text_voltage_interval.setAlignment(Qt.AlignCenter)
-        self.text_voltage_interval.move(50, 343)
-        self.edit_voltage_interval = QLineEdit(self)
-        self.edit_voltage_interval.move(200, 340)
-        self.edit_voltage_interval.setText('0')
-        self.edit_voltage_interval.setEnabled(False)
+        self.edit_voltage_set_max = QLineEdit(self)  # Voltage_set_max
+        self.edit_voltage_set_max.move(280, 330)
+        self.edit_voltage_set_max.setText('1')
+        self.edit_voltage_set_max.setValidator(QDoubleValidator())
+        self.edit_voltage_set_max.setEnabled(True)
 
-        #measurement_interval
-        self.text_measurement_interval = QLabel("Measurement_Interval, ms (1000ms = 1s)", self)
-        self.text_measurement_interval.setAlignment(Qt.AlignCenter)
-        self.text_measurement_interval.move(50, 373)
-        self.edit_measurement_interval = QLineEdit(self)
-        self.edit_measurement_interval.move(300, 370)
-        self.edit_measurement_interval.setText('1000')
-        self.edit_measurement_interval.setEnabled(False)
+        # voltage_interval
+        self.text_voltage_set_rise = QLabel("Voltage_Set_Rise, (V)", self)
+        self.text_voltage_set_rise.setAlignment(Qt.AlignCenter)
+        self.text_voltage_set_rise.move(50, 363)
+
+        self.edit_voltage_set_rise = QLineEdit(self)  # Voltage_set_rise
+        self.edit_voltage_set_rise.move(280, 360)
+        self.edit_voltage_set_rise.setText('0.01')
+        self.edit_voltage_set_rise.setValidator(QDoubleValidator())
+        self.edit_voltage_set_rise.setEnabled(True)
+
+        # Voltage_Measurement_Cycle (voltage 상승 주기 para)
+        self.text_voltage_rise_time = QLabel("Voltage_Rise_Time, (ms)", self)
+        self.text_voltage_rise_time.setAlignment(Qt.AlignCenter)
+        self.text_voltage_rise_time.move(50, 393)
+
+        self.edit_voltage_rise_time = QLineEdit(self)  # Voltage_set_rise_time
+        self.edit_voltage_rise_time.move(280, 390)
+        self.edit_voltage_rise_time.setText('10')
+        self.edit_voltage_rise_time.setValidator(QDoubleValidator())
+        self.edit_voltage_rise_time.setEnabled(True)
 
         # 측정 결과 UI
         # -----------------------------------------
-        self.text_result = QLabel("Result",self)
+        self.text_result = QLabel("Result", self)
         self.text_result.setAlignment(Qt.AlignCenter)
-        self.text_result.move(220,470)
+        self.text_result.move(280, 470)
         self.font_result = self.text_title.font()
-        self.font_result.setPointSize(12)
+        self.font_result.setPointSize(14)
         self.font_result.setBold(True)
         self.text_result.setFont(self.font_result)
         # -----------------------------------------
@@ -215,7 +238,7 @@ class MyApp(QWidget):
         self.text_input_voltage_measured.move(50, 500)
         self.edit_input_voltage_measured = QLabel(self)
         self.edit_input_voltage_measured.move(250, 500)
-        self.edit_input_voltage_measured.resize(150,22)
+        self.edit_input_voltage_measured.resize(150, 22)
         self.edit_input_voltage_measured.setText('0')
 
         # output_voltage_measured
@@ -224,7 +247,7 @@ class MyApp(QWidget):
         self.text_output_voltage_measured.move(50, 530)
         self.edit_output_voltage_measured = QLabel(self)
         self.edit_output_voltage_measured.move(250, 530)
-        self.edit_output_voltage_measured.resize(150,22)
+        self.edit_output_voltage_measured.resize(150, 22)
         self.edit_output_voltage_measured.setText('0')
 
         # output_current_measured
@@ -233,7 +256,7 @@ class MyApp(QWidget):
         self.text_output_current_measured.move(50, 560)
         self.edit_output_current_measured = QLabel(self)
         self.edit_output_current_measured.move(250, 560)
-        self.edit_output_current_measured.resize(150,22)
+        self.edit_output_current_measured.resize(150, 22)
         self.edit_output_current_measured.setText('0')
 
         # output_current_measured_out_of_pulse
@@ -242,20 +265,116 @@ class MyApp(QWidget):
         self.text_output_current_measured_out_of_pulse.move(50, 590)
         self.edit_output_current_measured_out_of_pulse = QLabel(self)
         self.edit_output_current_measured_out_of_pulse.move(250, 590)
-        self.edit_output_current_measured_out_of_pulse.resize(150,22)
+        self.edit_output_current_measured_out_of_pulse.resize(150, 22)
         self.edit_output_current_measured_out_of_pulse.setText('0')
 
-
-
         self.setWindowTitle('ALPES LASERS for KIST')
-        self.setGeometry(700,200,600,700)
+        self.setGeometry(700, 200, 600, 700)
         self.show()
 
+    def start_measure(self):
+        if int(self.edit_voltage_rise_time.text()) < 10:
+            QMessageBox.about(self, '실패', 'rise time 값이 너무 작습니다.')
+            return
+
+        if self.edit_voltage_set_min.text() == self.edit_voltage_set_max.text():
+            QMessageBox.about(self, '실패', 'voltage min, max값 설정이 올바르지 않습니다.')
+            return
+
+        global measurement_state
+        global measurer
+        self.btn_measure.setText("측정중")
+        self.btn_measure.setEnabled(False)
+        self.edit_voltage_set.setEnabled(False)
+
+        print("measure start...")
+        global list_input_voltage_measure_result
+        global list_output_voltage_measure_result
+        global list_output_current_measure_result
+        global list_output_current_out_of_pulse_measure_result
+        global list_voltage_set_measure_result
+        list_input_voltage_measure_result = list()
+        list_output_voltage_measure_result = list()
+        list_output_current_measure_result = list()
+        list_output_current_out_of_pulse_measure_result = list()
+        list_voltage_set_measure_result = list()
+
+        measurer = ValueUpdater(self, loop_time=float(self.edit_voltage_rise_time.text()) * 0.001)
+        measurer.callback.connect(self.voltage_measure_callback)
+        measurer.start()
+
+    def voltage_measure_callback(self):
+        global list_input_voltage_measure_result
+        global list_output_voltage_measure_result
+        global list_output_current_measure_result
+        global list_output_current_out_of_pulse_measure_result
+        global list_voltage_set_measure_result
+
+        import math
+
+        if measurer.isRunning == False:
+            print("callback 종료됨..")
+            self.edit_voltage_set.setText('0')
+            import pandas as pd
+            raw_data = {'input': list_input_voltage_measure_result, 'output': list_output_voltage_measure_result,
+                        'current': list_output_current_measure_result,
+                        'current_pulse': list_output_current_out_of_pulse_measure_result,
+                        'voltage_set': list_voltage_set_measure_result}  # 리스트 자료형으로 생성
+            pd_data = pd.DataFrame(raw_data)  # 데이터 프레임으로 전환
+            pd_data.to_excel(excel_writer='sample.xlsx')  # 엑셀로 저장
+            return
+
+        global measurement_state
+        if measurement_state == False:
+            measurement_state = True
+            current_voltage = round(float(self.edit_voltage_set_min.text()), 6)
+        else:
+            current_voltage = round(float(self.edit_voltage_set.text()), 6)
+
+        # float(self.edit_voltage_set_min.text())
+        # float(self.edit_voltage_set_max.text())
+
+        voltage_set_rise = round(float(self.edit_voltage_set_rise.text(), ), 6)
+        max_voltage = float(self.edit_voltage_set_max.text())
+
+        if current_voltage <= max_voltage:
+            # todo 측정
+            # DEBUG..
+            #            self.update_setting()
+
+            try:
+                input_voltage = str(s2.input_voltage_measured)
+                output_voltage = s2.measured_voltage
+                output_current = s2.measured_current
+                output_current_pulse = s2._info.output_current_measured_out_of_pulse
+            except Exception as e:
+                # DEBUG
+                import random
+                print("measure fail, random value replaced")
+                input_voltage = random.random()
+                output_voltage = random.random()
+                output_current = random.random()
+                output_current_pulse = random.random()
+                list_input_voltage_measure_result.append(input_voltage)
+                list_output_voltage_measure_result.append(output_voltage)
+                list_output_current_measure_result.append(output_current)
+                list_output_current_out_of_pulse_measure_result.append(output_current_pulse)
+
+            list_voltage_set_measure_result.append(self.edit_voltage_set.text())
+
+            self.edit_voltage_set.setText(str(round(current_voltage + voltage_set_rise, 6)))
+        else:
+            print("측정 종료")
+            measurement_state = False
+            self.btn_measure.setText("측정")
+            self.btn_measure.setEnabled(True)
+            self.edit_voltage_set.setEnabled(True)
+            measurer.stop()
 
     def start_refresh(self):
         global refresher
 
-        refresher = ValueUpdater(self,loop_time=0.3)
+        refresher = ValueUpdater(self, loop_time=0.03)
         refresher.callback.connect(self.thread_callback)
         refresher.start()
 
@@ -266,6 +385,20 @@ class MyApp(QWidget):
 
     def thread_callback(self, index):
         global s2
+        global connected_status
+
+        # DEBUG
+        if connected_status is False:
+            import random
+            input_voltage = random.random()
+            output_voltage = random.random()
+            output_current = random.random()
+            output_current_pulse = random.random()
+            self.edit_input_voltage_measured.setText(str(input_voltage))
+            self.edit_output_voltage_measured.setText(str(output_voltage))
+            self.edit_output_current_measured.setText(str(output_current))
+            self.edit_output_current_measured_out_of_pulse.setText(str(output_current_pulse))
+            return
 
         # 'output_current_measured', 'MCU_temperature', 'laser_temperature',
         # 'output_current_measured_out_of_pulse', 'status', 'pulse_clock_frequency', 'API_version',
@@ -287,10 +420,6 @@ class MyApp(QWidget):
         except Exception as e:
             print(e)
 
-
-
-
-
     def open_connection(self):
         global connected_status
         global th
@@ -298,35 +427,37 @@ class MyApp(QWidget):
 
         if connected_status == False:
             try:
-                #초기화
+                # 초기화
                 # th = S2SerialHandler(str(self.line_edit.text().encode('utf-8')))
                 th = S2SerialHandler(self.line_edit.text())
-                #열려라 포트
+                # 열려라 포트
                 th.open()
                 # 초기값 초기화
                 s2 = alpes.S2(th)
                 s2.set_up()
-                s2.settings.pulsing_mode = 0 # 무조건 OFF 초기화
+                s2.settings.pulsing_mode = 0  # 무조건 OFF 초기화
                 self.combo_box_pulsing.setCurrentText('S2_PULSING_OFF')
                 s2.settings.pulse_period = int(self.edit_period.text())
                 s2.settings.pulse_width = int(self.edit_pulse_width.text())
                 s2.settings.output_voltage_set = float(self.edit_voltage_set.text())
                 s2.settings.output_current_limit = float(self.edit_output_current_limit.text())
-                #초기 설정값 적용
+                # 초기 설정값 적용
                 s2.apply_current_settings()
                 s2.reload_info()
-                #측정값 업데이트 시작
+                # 측정값 업데이트 시작
                 self.start_refresh()
-                #UI 업데이트
+                # UI 업데이트
                 self.btn_conn.setText("Connected")
                 connected_status = True
             except Exception as e:
-                QMessageBox.about(self, '연결 실패', '포트를 확인해야합니다 : '+self.line_edit.text() + ',' + str(e))
+                QMessageBox.about(self, '연결 실패', '포트를 확인해야합니다 : ' + self.line_edit.text() + ',' + str(e))
                 connected_status = False
+                # Debug
+                self.start_refresh()
                 return
         elif connected_status == True:
             try:
-                #닫혀라 참깨 포트
+                # 닫혀라 참깨 포트
                 th.close()
                 self.btn_conn.setText("Not Connected")
                 connected_status = False
@@ -336,7 +467,6 @@ class MyApp(QWidget):
                 QMessageBox.about(self, '에러', '이미 연결이 해제되어 있습니다.')
                 connected_status = False
                 return
-
 
     # def simple_connection_test(self):
     #     test_port_name = self.line_edit.text()
@@ -374,7 +504,7 @@ class MyApp(QWidget):
         elif self.combo_box_pulsing.currentText() == 'S2_PULSING_BURST_EXTERNAL':
             s2.settings.pulsing_mode = 6
 
-        #setting값 설정
+        # setting값 설정
         s2.settings.pulse_period = int(self.edit_period.text())
         s2.settings.pulse_width = int(self.edit_pulse_width.text())
         s2.settings.output_voltage_set = float(self.edit_voltage_set.text())
@@ -384,99 +514,6 @@ class MyApp(QWidget):
         # print(s2.settings)
         s2.reload_info()
         # print(s2.info)
-
-
-        '''
-        test_port_name = self.line_edit.text()
-        s2port = serial_open(test_port_name.encode('utf-8'))
-        print(test_port_name.encode('utf-8'))
-
-        if s2port == NULL:
-            QMessageBox.about(self, '연결 테스트 실패', 'port connect fail, Name is :' + str(test_port_name.encode('utf-8')))
-            return
-
-        #1. 포트 설정
-        s2_serial_setup(s2port, S2_BAUD)
-        s2s = S2_settings()
-        s2_query_settings(s2port, s2s)
-
-        #2. voltage set 설정
-        s2s.output_voltage_set = float(str(self.edit_voltage_set.text()))
-        
-        #3. pulsing mode 설정
-        #        S2_PULSING_OFF, S2_PULSING_INTERNAL, S2_PULSING_EXTERNAL, S2_PULSING_BURST, S2_PULSING_BURST_EXTERNAL
-        if self.combo_box_pulsing.currentText() == 'S2_PULSING_OFF':
-            s2s.pulsing_mode = S2_PULSING_OFF
-        elif self.combo_box_pulsing.currentText() == 'S2_PULSING_INTERNAL':
-            s2s.pulsing_mode = S2_PULSING_INTERNAL
-        elif self.combo_box_pulsing.currentText() == 'S2_PULSING_EXTERNAL':
-            s2s.pulsing_mode = S2_PULSING_EXTERNAL
-        elif self.combo_box_pulsing.currentText() == 'S2_PULSING_BURST':
-            s2s.pulsing_mode = S2_PULSING_BURST
-        elif self.combo_box_pulsing.currentText() == 'S2_PULSING_BURST_EXTERNAL':
-            s2s.pulsing_mode = S2_PULSING_BURST_EXTERNAL
-
-        s2_set_settings(s2port, s2s, False)
-        s2i = S2_info()
-        s2_query_info(s2port, s2i)
-
-        try:
-            # 4. input_voltage_measured
-            self.edit_input_voltage_measured.setText(str(s2i.intput_voltage_measured))
-        except Exception as e:
-            self.edit_input_voltage_measured.setText('N/A')
-
-        try:
-            # 5. output_voltage_measured
-            self.edit_output_voltage_measured.setText(str(s2i.output_voltage_measured))
-        except Exception as e:
-            self.edit_output_voltage_measured.setText('N/A')
-
-        try:
-            # 6. output_current_measured
-            self.edit_output_current_measured.setText(str(s2i.output_current_measured))
-        except Exception as e:
-            self.edit_output_current_measured.setText('N/A')
-
-        try:
-            # 7. output_current_measured_out_of_pulse
-            self.edit_output_current_measured_out_of_pulse.setText(str(s2i.output_current_measured_out_of_pulse))
-        except Exception as e:
-            self.edit_output_current_measured_out_of_pulse.setText('N/A')
-
-        serial_close(s2port)
-        QMessageBox.about(self, '측정 완료', 'OK')
-
-        # for i in range(10):
-        #     s2_set_settings(s2port, s2s, False)
-        #     s2_query_info(s2port, s2i)
-        #     info((s2i.output_voltage_measured, s2i.output_current_measured))
-        #     QMessageBox.about(self, '연결 테스트 중', 'voltage_measuerd :' +str(s2i.output_voltage_measured)+ ' | output_current_measured :' +str(s2i.output_voltage_measured))
-
-        serial_close(s2port)
-
-
-        # s2_serial_setup(s2port, S2_BAUD)
-        #
-        # s2s = S2_settings()
-        # s2_query_settings(s2port, s2s)
-        # s2s.output_voltage_set = 2.5
-        # s2s.pulsing_mode = S2_PULSING_INTERNAL
-        # s2_set_settings(s2port, s2s, False)
-        #
-        # s2i = S2_info()
-        #
-        # for i in range(10):
-        #     s2_set_settings(s2port, s2s, False)
-        #
-        #     s2_query_info(s2port, s2i)
-        #     info((s2i.output_voltage_measured, s2i.output_current_measured))
-        #     QMessageBox.about(self, '연결 테스트 중', 'voltage_measuerd :' +str(s2i.output_voltage_measured)+ ' | output_current_measured :' +str(s2i.output_voltage_measured))
-        #
-        # serial_close(s2port)
-        # QMessageBox.about(self, '연결 테스트 완료', '통신 종료')
-        '''
-
 
 
 if __name__ == "__main__":
