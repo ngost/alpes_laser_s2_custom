@@ -37,6 +37,7 @@ global list_output_voltage_measure_result
 global list_output_current_measure_result
 global list_output_current_out_of_pulse_measure_result
 global list_voltage_set_measure_result
+global list_measure_timespan_result
 
 
 class ValueUpdater(QThread):
@@ -293,11 +294,14 @@ class MyApp(QWidget):
         global list_output_current_measure_result
         global list_output_current_out_of_pulse_measure_result
         global list_voltage_set_measure_result
+        global list_measure_timespan_result
+
         list_input_voltage_measure_result = list()
         list_output_voltage_measure_result = list()
         list_output_current_measure_result = list()
         list_output_current_out_of_pulse_measure_result = list()
         list_voltage_set_measure_result = list()
+        list_measure_timespan_result = list()
 
         measurer = ValueUpdater(self, loop_time=float(self.edit_voltage_rise_time.text()) * 0.001)
         measurer.callback.connect(self.voltage_measure_callback)
@@ -309,19 +313,28 @@ class MyApp(QWidget):
         global list_output_current_measure_result
         global list_output_current_out_of_pulse_measure_result
         global list_voltage_set_measure_result
+        global list_measure_timespan_result
 
         import math
 
         if measurer.isRunning == False:
-            print("callback 종료됨..")
+            print("callback 종료됨.. 결과 엑셀 출력 예정")
             self.edit_voltage_set.setText('0')
             import pandas as pd
+            import os
+            import datetime
+            now = datetime.datetime.now()
+
             raw_data = {'input': list_input_voltage_measure_result, 'output': list_output_voltage_measure_result,
                         'current': list_output_current_measure_result,
                         'current_pulse': list_output_current_out_of_pulse_measure_result,
-                        'voltage_set': list_voltage_set_measure_result}  # 리스트 자료형으로 생성
+                        'voltage_set': list_voltage_set_measure_result,
+                        'measure_time': list_measure_timespan_result}  # 리스트 자료형으로 생성
             pd_data = pd.DataFrame(raw_data)  # 데이터 프레임으로 전환
-            pd_data.to_excel(excel_writer='sample.xlsx')  # 엑셀로 저장
+            path = os.path.join(os.path.expanduser("~"), "Desktop", "voltage_sample_"
+                                +str(now.hour)+str(now.minute)+str(now.second) + ".xlsx")
+            pd_data.to_excel(path)  # 엑셀로 저장
+            QMessageBox.about(self, '완료', '측정이 완료되었습니다.')
             return
 
         global measurement_state
@@ -350,18 +363,22 @@ class MyApp(QWidget):
             except Exception as e:
                 # DEBUG
                 import random
+                import datetime
                 print("measure fail, random value replaced")
                 input_voltage = random.random()
                 output_voltage = random.random()
                 output_current = random.random()
                 output_current_pulse = random.random()
+                now = datetime.datetime.now()
+
                 list_input_voltage_measure_result.append(input_voltage)
                 list_output_voltage_measure_result.append(output_voltage)
                 list_output_current_measure_result.append(output_current)
                 list_output_current_out_of_pulse_measure_result.append(output_current_pulse)
+                list_measure_timespan_result.append(str(now.hour)+':'+str(now.minute)+':'+str(now.second)+':'+str(now.microsecond))
+
 
             list_voltage_set_measure_result.append(self.edit_voltage_set.text())
-
             self.edit_voltage_set.setText(str(round(current_voltage + voltage_set_rise, 6)))
         else:
             print("측정 종료")
