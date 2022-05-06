@@ -351,19 +351,28 @@ class MyApp(QWidget):
         max_voltage = float(self.edit_voltage_set_max.text())
 
         if current_voltage <= max_voltage:
+            import datetime
             # todo 측정
             # DEBUG..
-            #            self.update_setting()
+            self.update_setting()
 
             try:
-                input_voltage = str(s2.input_voltage_measured)
+                input_voltage = s2.input_voltage_measured
                 output_voltage = s2.measured_voltage
                 output_current = s2.measured_current
                 output_current_pulse = s2._info.output_current_measured_out_of_pulse
+                now = datetime.datetime.now()
+
+                #값 저장
+                list_input_voltage_measure_result.append(input_voltage)
+                list_output_voltage_measure_result.append(output_voltage)
+                list_output_current_measure_result.append(output_current)
+                list_output_current_out_of_pulse_measure_result.append(output_current_pulse)
+                list_measure_timespan_result.append(
+                    str(now.hour) + ':' + str(now.minute) + ':' + str(now.second) + ':' + str(now.microsecond))
             except Exception as e:
                 # DEBUG
                 import random
-                import datetime
                 print("measure fail, random value replaced")
                 input_voltage = random.random()
                 output_voltage = random.random()
@@ -405,23 +414,23 @@ class MyApp(QWidget):
         global connected_status
 
         # DEBUG
-        if connected_status is False:
-            import random
-            input_voltage = random.random()
-            output_voltage = random.random()
-            output_current = random.random()
-            output_current_pulse = random.random()
-            self.edit_input_voltage_measured.setText(str(input_voltage))
-            self.edit_output_voltage_measured.setText(str(output_voltage))
-            self.edit_output_current_measured.setText(str(output_current))
-            self.edit_output_current_measured_out_of_pulse.setText(str(output_current_pulse))
-            return
+        # if connected_status is False:
+        #     import random
+        #     input_voltage = random.random()
+        #     output_voltage = random.random()
+        #     output_current = random.random()
+        #     output_current_pulse = random.random()
+        #     self.edit_input_voltage_measured.setText(str(input_voltage))
+        #     self.edit_output_voltage_measured.setText(str(output_voltage))
+        #     self.edit_output_current_measured.setText(str(output_current))
+        #     self.edit_output_current_measured_out_of_pulse.setText(str(output_current_pulse))
+        #     return
 
         # 'output_current_measured', 'MCU_temperature', 'laser_temperature',
         # 'output_current_measured_out_of_pulse', 'status', 'pulse_clock_frequency', 'API_version',
         try:
             self.update_setting()
-            input_voltage = str(s2.input_voltage_measured)
+            input_voltage = s2.input_voltage_measured
             output_voltage = s2.measured_voltage
             output_current = s2.measured_current
             output_current_pulse = s2._info.output_current_measured_out_of_pulse
@@ -470,7 +479,7 @@ class MyApp(QWidget):
                 QMessageBox.about(self, '연결 실패', '포트를 확인해야합니다 : ' + self.line_edit.text() + ',' + str(e))
                 connected_status = False
                 # Debug
-                self.start_refresh()
+                # self.start_refresh()
                 return
         elif connected_status == True:
             try:
