@@ -3,7 +3,7 @@ import time
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QThread
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMessageBox, QLineEdit, QLabel, QComboBox
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMessageBox, QLineEdit, QLabel, QComboBox, QAction
 from PyQt5.QtGui import QPainter, QPen, QIntValidator, QDoubleValidator
 from PyQt5.QtCore import QCoreApplication
 from PyQt5 import QtCore
@@ -37,6 +37,8 @@ global list_output_voltage_measure_result
 global list_output_current_measure_result
 global list_output_current_out_of_pulse_measure_result
 global list_voltage_set_measure_result
+global list_pulse_period
+global list_pulse_width
 global list_measure_timespan_result
 
 
@@ -269,6 +271,9 @@ class MyApp(QWidget):
         self.edit_output_current_measured_out_of_pulse.resize(150, 22)
         self.edit_output_current_measured_out_of_pulse.setText('0')
 
+        self.quit = QAction("quit", self)
+        self.quit.triggered.connect(self.closeEvent)
+
         self.setWindowTitle('ALPES LASERS for KIST')
         self.setGeometry(700, 200, 600, 700)
         self.show()
@@ -295,6 +300,8 @@ class MyApp(QWidget):
         global list_output_current_out_of_pulse_measure_result
         global list_voltage_set_measure_result
         global list_measure_timespan_result
+        global list_pulse_period
+        global list_pulse_width
 
         list_input_voltage_measure_result = list()
         list_output_voltage_measure_result = list()
@@ -302,6 +309,9 @@ class MyApp(QWidget):
         list_output_current_out_of_pulse_measure_result = list()
         list_voltage_set_measure_result = list()
         list_measure_timespan_result = list()
+        list_pulse_period = list()
+        list_pulse_width = list()
+
 
         measurer = ValueUpdater(self, loop_time=float(self.edit_voltage_rise_time.text()) * 0.001)
         measurer.callback.connect(self.voltage_measure_callback)
@@ -314,6 +324,8 @@ class MyApp(QWidget):
         global list_output_current_out_of_pulse_measure_result
         global list_voltage_set_measure_result
         global list_measure_timespan_result
+        global list_pulse_period
+        global list_pulse_width
 
         import math
 
@@ -329,7 +341,10 @@ class MyApp(QWidget):
                         'current': list_output_current_measure_result,
                         'current_pulse': list_output_current_out_of_pulse_measure_result,
                         'voltage_set': list_voltage_set_measure_result,
-                        'measure_time': list_measure_timespan_result}  # 리스트 자료형으로 생성
+                        'pulse_period': list_pulse_period,
+                        'pulse_width': list_pulse_width,
+                        'measure_time': list_measure_timespan_result
+                        }  # 리스트 자료형으로 생성
             pd_data = pd.DataFrame(raw_data)  # 데이터 프레임으로 전환
             path = os.path.join(os.path.expanduser("~"), "Desktop", "voltage_sample_"
                                 +str(now.hour)+str(now.minute)+str(now.second) + ".xlsx")
@@ -361,6 +376,8 @@ class MyApp(QWidget):
                 output_voltage = s2.measured_voltage
                 output_current = s2.measured_current
                 output_current_pulse = s2._info.output_current_measured_out_of_pulse
+                pulse_period = s2.pulse_period
+                pulse_width = s2.pulse_width
                 now = datetime.datetime.now()
 
                 #값 저장
@@ -368,6 +385,8 @@ class MyApp(QWidget):
                 list_output_voltage_measure_result.append(output_voltage)
                 list_output_current_measure_result.append(output_current)
                 list_output_current_out_of_pulse_measure_result.append(output_current_pulse)
+                list_pulse_period.append(pulse_period)
+                list_pulse_width.append(pulse_width)
                 list_measure_timespan_result.append(
                     str(now.hour) + ':' + str(now.minute) + ':' + str(now.second) + ':' + str(now.microsecond))
             except Exception as e:
@@ -400,7 +419,7 @@ class MyApp(QWidget):
     def start_refresh(self):
         global refresher
 
-        refresher = ValueUpdater(self, loop_time=0.03)
+        refresher = ValueUpdater(self, loop_time=0.5)
         refresher.callback.connect(self.thread_callback)
         refresher.start()
 
@@ -541,11 +560,65 @@ class MyApp(QWidget):
         s2.reload_info()
         # print(s2.info)
 
+    def closeEvent(self, event):
+        SavePreference()
+
+def SavePreference():
+    import os
+    import shelve
+    path = os.path.expanduser('~/alpes_preference')
+    db = shelve.open(path)
+
+    # 저장할 datas
+    db['port'] = ex.line_edit.text()
+    db['period'] = ex.edit_period.text()
+    db['pulse_width'] = ex.edit_pulse_width.text()
+    db['out_voltage_set'] = ex.edit_voltage_set.text()
+    db['out_current_limit'] = ex.edit_output_current_limit.text()
+    db['voltage_set_min'] = ex.edit_voltage_set_min.text()
+    db['voltage_set_max'] = ex.edit_voltage_set_max.text()
+    db['voltage_set_rise'] = ex.edit_voltage_set_rise.text()
+    db['voltage_set_rise_time'] = ex.edit_voltage_rise_time.text()
+    print("saved")
+
+    # del db['test']
+    db.close()
+
+def LoadPreference():
+    print("프로그램 시작")
+    import os
+    import shelve
+
+    path = os.path.expanduser('~/alpes_preference')
+    db = shelve.open(path)
+
+    global serverIP  # 전역 변수 사용할것이다 라는 뜻..
+    global serverPort  # 전역 변수 사용할것이다 라는 뜻..
+    global routine_time  # 반복 시간
+    global delay_start_time  # 지연 시작 시간
+
+    try:
+        # 불러올 datas
+        ex.line_edit.setText(db['port'])
+        ex.edit_period.setText(db['period'])
+        ex.edit_pulse_width.setText(db['pulse_width'])
+        ex.edit_voltage_set.setText(db['out_voltage_set'])
+        ex.edit_output_current_limit.setText(db['out_current_limit'])
+        ex.edit_voltage_set_min.setText(db['voltage_set_min'])
+        ex.edit_voltage_set_max.setText(db['voltage_set_max'])
+        ex.edit_voltage_set_rise.setText(db['voltage_set_rise'])
+        ex.edit_voltage_rise_time.setText(db['voltage_set_rise_time'])
+
+    except Exception:
+        pass
+    except KeyError:
+        pass
 
 if __name__ == "__main__":
     try:
         app = QApplication(sys.argv)
         ex = MyApp()
+        LoadPreference()
         sys.exit(app.exec_())
     except Exception as e:
         print(e)
