@@ -4,7 +4,7 @@ import time
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QThread
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QMessageBox, QLineEdit, QLabel, QComboBox, QAction
-from PyQt5.QtGui import QPainter, QPen, QIntValidator, QDoubleValidator
+from PyQt5.QtGui import QPainter, QPen, QIntValidator, QDoubleValidator, QIcon
 from PyQt5.QtCore import QCoreApplication
 from PyQt5 import QtCore
 import sdeux.gen5 as alpes
@@ -92,12 +92,14 @@ class MyApp(QWidget):
         # ----------------------------------구분선
 
     def initUI(self):
+        self.setWindowIcon(QIcon('app_icon.ico'))
         global connected_status
         global s2_port_name
         global measurement_state
         measurement_state = False
         connected_status = False
         s2_port_name = 'COM4'
+        self.setStyleSheet("background-color:#ffeaff;")
 
         self.text_title = QLabel("ALPES LASERS for KIST", self)
         self.text_title.setAlignment(Qt.AlignCenter)
@@ -285,6 +287,10 @@ class MyApp(QWidget):
 
         if self.edit_voltage_set_min.text() == self.edit_voltage_set_max.text():
             QMessageBox.about(self, '실패', 'voltage min, max값 설정이 올바르지 않습니다.')
+            return
+
+        if connected_status is False:
+            QMessageBox.about(self, '실패', '기기와 연결 후 사용 가능합니다(Not connected).')
             return
 
         global measurement_state
